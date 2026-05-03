@@ -3,11 +3,13 @@ export const toggleId = (items, id) =>
 
 export const stripHtml = (html) => html.replace(/<[^>]+>/g, " ");
 
-export const sharePlatforms = ["facebook", "twitter", "linkedin", "Instagram", "Email"];
+export const sharePlatforms = ["facebook", "twitter", "linkedin", "whatsapp", "mail"];
 
 export const socialAccountLabels = {
   twitter: "Twitter",
   linkedin: "LinkedIn",
+  facebook: "Facebook",
+  instagram: "Instagram",
   github: "GitHub",
   website: "Website",
   email: "Email",

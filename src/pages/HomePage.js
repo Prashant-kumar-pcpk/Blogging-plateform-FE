@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { apiFetch } from "../api/api";
 import FilterPill from "../components/common/FilterPill";
 import StatCard from "../components/common/StatCard";
 import { stripHtml } from "../utils/postHelpers";
 
 function HomePage({ appState }) {
-  const { posts, categories, tags, subscriptions, user } = appState;
+  const { posts, categories, tags, subscriptions, user, token, refresh } = appState;
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [activeTag, setActiveTag] = useState("all");
+  const [message, setMessage] = useState("");
 
   const filteredPosts = posts.filter((post) => {
     const matchesSearch =
@@ -25,6 +27,28 @@ function HomePage({ appState }) {
   });
 
   const featuredPost = filteredPosts[0];
+  const subscribedCategoryIds = subscriptions
+    .filter((subscription) => subscription.targetType === "category" && subscription.category?._id)
+    .map((subscription) => subscription.category._id);
+
+  const toggleCategorySubscription = async (categoryId) => {
+    if (!user) {
+      setMessage("Log in to subscribe to categories.");
+      return;
+    }
+
+    try {
+      await apiFetch("/subscriptions/toggle", {
+        token,
+        method: "POST",
+        body: { targetType: "category", categoryId },
+      });
+      await refresh();
+      setMessage("Category subscription updated.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
 
   return (
     <>
@@ -78,13 +102,25 @@ function HomePage({ appState }) {
                 All
               </FilterPill>
               {categories.map((category) => (
-                <FilterPill
-                  key={category._id}
-                  active={activeCategory === category._id}
-                  onClick={() => setActiveCategory(category._id)}
-                >
-                  {category.name}
-                </FilterPill>
+                <div key={category._id} className="flex items-center gap-2">
+                  <FilterPill
+                    active={activeCategory === category._id}
+                    onClick={() => setActiveCategory(category._id)}
+                  >
+                    {category.name}
+                  </FilterPill>
+                  <button
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      subscribedCategoryIds.includes(category._id)
+                        ? "bg-ink text-sand"
+                        : "border border-ink/10 text-ink/60"
+                    }`}
+                    onClick={() => toggleCategorySubscription(category._id)}
+                    type="button"
+                  >
+                    {subscribedCategoryIds.includes(category._id) ? "Subscribed" : "Subscribe"}
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -142,6 +178,7 @@ function HomePage({ appState }) {
           ))}
         </section>
       </section>
+      {message ? <div className="rounded-[1.5rem] bg-white px-4 py-3 text-sm shadow-card">{message}</div> : null}
     </>
   );
 }

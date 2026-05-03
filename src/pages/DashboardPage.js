@@ -12,10 +12,12 @@ const formatDate = (value) =>
   });
 
 function DashboardPage({ appState }) {
-  const { token, user, subscriptions, categories, refresh } = appState;
+  const { token, user, subscriptions, refresh } = appState;
   const [posts, setPosts] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [moderationQueue, setModerationQueue] = useState([]);
+  const [subscriptionFeed, setSubscriptionFeed] = useState([]);
+  const [taxonomyItems, setTaxonomyItems] = useState({ categories: [], tags: [] });
   const [profile, setProfile] = useState({
     name: user?.name || "",
     bio: user?.bio || "",
@@ -29,17 +31,23 @@ function DashboardPage({ appState }) {
     type: "category",
   });
   const [message, setMessage] = useState("");
+  const [editingTaxonomy, setEditingTaxonomy] = useState(null);
 
   useEffect(() => {
     const loadDashboard = async () => {
-      const [myPosts, dashboardAnalytics, queuedComments] = await Promise.all([
+      const [myPosts, dashboardAnalytics, queuedComments, feed, allCategories, allTags] = await Promise.all([
         apiFetch("/posts/mine", { token }),
         apiFetch("/posts/analytics/dashboard", { token }),
         apiFetch("/comments/moderation/queue", { token }),
+        apiFetch("/subscriptions/feed", { token }),
+        apiFetch("/categories"),
+        apiFetch("/tags"),
       ]);
       setPosts(myPosts);
       setAnalytics(dashboardAnalytics);
       setModerationQueue(queuedComments);
+      setSubscriptionFeed(feed);
+      setTaxonomyItems({ categories: allCategories, tags: allTags });
     };
 
     loadDashboard().catch((error) => setMessage(error.message));
@@ -96,7 +104,51 @@ function DashboardPage({ appState }) {
     });
     setTaxonomyForm({ ...taxonomyForm, name: "", description: "" });
     await refresh();
+    const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+    setTaxonomyItems({ categories: allCategories, tags: allTags });
     setMessage(`${taxonomyForm.type} created`);
+  };
+
+  const startTaxonomyEdit = (type, item) => {
+    setEditingTaxonomy({
+      type,
+      id: item._id,
+      name: item.name,
+      description: item.description || "",
+      color: item.color || "#0f766e",
+    });
+    setMessage("");
+  };
+
+  const saveTaxonomyEdit = async () => {
+    if (!editingTaxonomy) {
+      return;
+    }
+
+    const path = editingTaxonomy.type === "category" ? "/categories" : "/tags";
+    await apiFetch(`${path}/${editingTaxonomy.id}`, {
+      token,
+      method: "PUT",
+      body: {
+        name: editingTaxonomy.name,
+        description: editingTaxonomy.description,
+        color: editingTaxonomy.type === "category" ? editingTaxonomy.color : undefined,
+      },
+    });
+    const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+    setTaxonomyItems({ categories: allCategories, tags: allTags });
+    setEditingTaxonomy(null);
+    await refresh();
+    setMessage(`${editingTaxonomy.type} updated`);
+  };
+
+  const deleteTaxonomy = async (type, id) => {
+    const path = type === "category" ? "/categories" : "/tags";
+    await apiFetch(`${path}/${id}`, { token, method: "DELETE" });
+    const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+    setTaxonomyItems({ categories: allCategories, tags: allTags });
+    await refresh();
+    setMessage(`${type} deleted`);
   };
 
   const publishedPosts = posts.filter((post) => post.status === "published");
@@ -168,7 +220,7 @@ function DashboardPage({ appState }) {
                 {user?.avatar ? (
                   <img
                     src={user.avatar}
-                    // alt={user.name}
+                    alt={user?.name || "User avatar"}
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -522,6 +574,39 @@ function DashboardPage({ appState }) {
           </section>
 
           <section className="rounded-[2rem] bg-white p-6 shadow-card">
+            <p className="text-xs uppercase tracking-[0.3em] text-ink/40">Notifications</p>
+            <h2 className="mt-2 font-display text-3xl">Subscription feed</h2>
+            <div className="mt-5 space-y-3">
+              {subscriptionFeed.length ? (
+                subscriptionFeed.map((item) => (
+                  <div key={item._id} className="rounded-[1.5rem] bg-smoke p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-ink">{item.title}</p>
+                        <p className="text-sm text-ink/55">
+                          {item.notificationType === "author"
+                            ? `New post from ${item.author?.name || "an author"}`
+                            : `Update in ${item.categories?.[0]?.name || "a subscribed category"}`}
+                        </p>
+                      </div>
+                      <Link
+                        className="rounded-full border border-ink/10 px-4 py-2 text-sm font-semibold"
+                        to={`/posts/${item.slug}`}
+                      >
+                        Open
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.5rem] bg-smoke p-4 text-sm text-ink/60">
+                  Subscribe to authors or categories to see new-post notifications here.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] bg-white p-6 shadow-card">
             <p className="text-xs uppercase tracking-[0.3em] text-ink/40">Taxonomy lab</p>
             <h2 className="mt-2 font-display text-3xl">Categories and tags</h2>
             <form className="mt-5 space-y-3" onSubmit={createTaxonomy}>
@@ -558,16 +643,92 @@ function DashboardPage({ appState }) {
               </button>
             </form>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <span
-                  key={category._id}
-                  className="rounded-full px-3 py-1 text-xs font-semibold text-white"
-                  style={{ backgroundColor: category.color }}
-                >
-                  {category.name}
-                </span>
-              ))}
+            {editingTaxonomy ? (
+              <div className="mt-5 rounded-[1.5rem] border border-ink/10 p-4">
+                <p className="text-sm font-semibold text-ink">Editing {editingTaxonomy.type}</p>
+                <div className="mt-3 space-y-3">
+                  <InputField
+                    label="Name"
+                    value={editingTaxonomy.name}
+                    onChange={(value) => setEditingTaxonomy({ ...editingTaxonomy, name: value })}
+                  />
+                  <InputField
+                    label="Description"
+                    value={editingTaxonomy.description}
+                    onChange={(value) => setEditingTaxonomy({ ...editingTaxonomy, description: value })}
+                  />
+                  {editingTaxonomy.type === "category" ? (
+                    <InputField
+                      label="Color"
+                      value={editingTaxonomy.color}
+                      onChange={(value) => setEditingTaxonomy({ ...editingTaxonomy, color: value })}
+                    />
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-sand"
+                      onClick={saveTaxonomyEdit}
+                      type="button"
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="rounded-full border border-ink/10 px-4 py-2 text-sm font-semibold"
+                      onClick={() => setEditingTaxonomy(null)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-ink">Categories</p>
+                <div className="mt-3 space-y-2">
+                  {taxonomyItems.categories.map((category) => (
+                    <div key={category._id} className="flex items-center justify-between gap-3 rounded-[1.25rem] bg-smoke p-3">
+                      <span
+                        className="rounded-full px-3 py-1 text-xs font-semibold text-white"
+                        style={{ backgroundColor: category.color }}
+                      >
+                        {category.name}
+                      </span>
+                      <div className="flex gap-2">
+                        <button className="rounded-full border border-ink/10 px-3 py-1 text-xs font-semibold" onClick={() => startTaxonomyEdit("category", category)} type="button">
+                          Edit
+                        </button>
+                        <button className="rounded-full border border-coral/30 px-3 py-1 text-xs font-semibold text-coral" onClick={() => deleteTaxonomy("category", category._id)} type="button">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-ink">Tags</p>
+                <div className="mt-3 space-y-2">
+                  {taxonomyItems.tags.map((tag) => (
+                    <div key={tag._id} className="flex items-center justify-between gap-3 rounded-[1.25rem] bg-smoke p-3">
+                      <span className="rounded-full border border-ink/10 px-3 py-1 text-xs font-semibold text-ink/75">
+                        #{tag.name}
+                      </span>
+                      <div className="flex gap-2">
+                        <button className="rounded-full border border-ink/10 px-3 py-1 text-xs font-semibold" onClick={() => startTaxonomyEdit("tag", tag)} type="button">
+                          Edit
+                        </button>
+                        <button className="rounded-full border border-coral/30 px-3 py-1 text-xs font-semibold text-coral" onClick={() => deleteTaxonomy("tag", tag._id)} type="button">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
 

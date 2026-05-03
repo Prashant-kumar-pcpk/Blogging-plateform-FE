@@ -27,14 +27,12 @@ const buildShareLink = ({ platform, post, postUrl }) => {
       return `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${title}`;
     case "linkedin":
       return `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
-    // case "whatsapp":
-    //   return `https://wa.me/?text=${encodeURIComponent(`${post.title} ${postUrl}`)}`;
-    // case "mail":
-    //   return `mailto:?subject=${title}&body=${encodeURIComponent(
-    //     `${post.excerpt || "Take a look at this post:"}\n\n${postUrl}`
-    //   )}`;
-    case "instagram":
-      return `https://www.instagram.com/sharer/sharer.inst?url=${encodedUrl}`;
+    case "whatsapp":
+      return `https://wa.me/?text=${encodeURIComponent(`${post.title} ${postUrl}`)}`;
+    case "mail":
+      return `mailto:?subject=${title}&body=${encodeURIComponent(
+        `${post.excerpt || "Take a look at this post:"}\n\n${postUrl}`
+      )}`;
     default:
       return "";
   }
@@ -234,20 +232,11 @@ function PostDetailsPage({ appState }) {
     const postUrl = window.location.href;
     const shareUrl = buildShareLink({ platform, post, postUrl });
 
-    if (platform === "linkedin" && !user?.socialLinks?.linkedin?.trim()) {
-      setMessage("Add your LinkedIn profile in Dashboard before sharing on LinkedIn.");
-      return;
-    }
-
     openShareTarget(platform, shareUrl);
 
     try {
       await apiFetch(`/posts/${post._id}/share`, { method: "POST", body: { platform } });
-      setMessage(
-        platform === "linkedin"
-          ? "LinkedIn share opened in a new tab. If LinkedIn asks, sign in with your connected account."
-          : `Shared to ${platform}`
-      );
+      setMessage(platform === "mail" ? "Mail draft opened." : `Share window opened for ${platform}.`);
     } catch (error) {
       setMessage(error.message);
     }
