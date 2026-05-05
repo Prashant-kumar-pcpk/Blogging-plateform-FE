@@ -90,6 +90,13 @@ function DashboardPage({ appState }) {
       nextErrors.bio = "Bio must be 300 characters or less.";
     }
 
+    ["linkedin", "twitter", "facebook", "instagram"].forEach((field) => {
+      const value = profile.socialLinks?.[field];
+      if (value && !/^https?:\/\//i.test(value.trim())) {
+        nextErrors[field] = "Enter a valid http(s) URL.";
+      }
+    });
+
     setProfileErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       setMessage("Fix the highlighted profile fields before saving.");
@@ -562,6 +569,42 @@ function DashboardPage({ appState }) {
                 maxLength={300}
                 placeholder="Tell readers about yourself"
               />
+              <InputField
+                label="LinkedIn"
+                value={profile.socialLinks.linkedin || ""}
+                onChange={(value) =>
+                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, linkedin: value } })
+                }
+                error={profileErrors.linkedin}
+                placeholder="https://linkedin.com/in/your-profile"
+              />
+              <InputField
+                label="Twitter"
+                value={profile.socialLinks.twitter || ""}
+                onChange={(value) =>
+                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, twitter: value } })
+                }
+                error={profileErrors.twitter}
+                placeholder="https://twitter.com/your-handle"
+              />
+              <InputField
+                label="Facebook"
+                value={profile.socialLinks.facebook || ""}
+                onChange={(value) =>
+                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, facebook: value } })
+                }
+                error={profileErrors.facebook}
+                placeholder="https://facebook.com/your-page"
+              />
+              <InputField
+                label="Instagram"
+                value={profile.socialLinks.instagram || ""}
+                onChange={(value) =>
+                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, instagram: value } })
+                }
+                error={profileErrors.instagram}
+                placeholder="https://instagram.com/your-handle"
+              />
               <div className="flex gap-3">
                   <button
                     className="flex-1 rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
@@ -589,6 +632,26 @@ function DashboardPage({ appState }) {
                   <p className="mt-2 text-sm leading-6 text-ink/65">
                     {profile.bio || "No bio added yet."}
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {[
+                      ["LinkedIn", profile.socialLinks.linkedin],
+                      ["Twitter", profile.socialLinks.twitter],
+                      ["Facebook", profile.socialLinks.facebook],
+                      ["Instagram", profile.socialLinks.instagram],
+                    ]
+                      .filter(([, value]) => value)
+                      .map(([label, value]) => (
+                        <a
+                          key={`${label}-${value}`}
+                          className="rounded-full border border-ink/10 bg-white px-3 py-1 text-xs font-semibold text-ink/70"
+                          href={value}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {label}
+                        </a>
+                      ))}
+                  </div>
                 </div>
                 <button
                   className="w-full rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
