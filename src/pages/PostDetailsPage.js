@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { apiFetch } from "../api/api";
-import { getConnectedSocialAccounts, sharePlatforms } from "../utils/postHelpers";
+import {
+  estimateReadTime,
+  getConnectedSocialAccounts,
+  sharePlatforms,
+  stripHtml,
+} from "../utils/postHelpers";
 
 const moderationOptions = [
   { value: "visible", label: "Approve" },
@@ -53,7 +58,7 @@ const openShareTarget = (platform, shareUrl) => {
 
 function PostDetailsPage({ appState }) {
   const { slug } = useParams();
-  const { token, user, refresh } = appState;
+  const { token, user, posts } = appState;
   const [post, setPost] = useState(null);
   const [viewers, setViewers] = useState([]);
   const [showViewers, setShowViewers] = useState(false);
@@ -105,6 +110,18 @@ function PostDetailsPage({ appState }) {
 
   const isPostOwner = Boolean(user && post && user._id === post.author._id);
   const connectedSocialAccounts = getConnectedSocialAccounts(user);
+  const readTime = estimateReadTime(post?.content || "");
+  const relatedPosts = posts
+    .filter(
+      (item) =>
+        item.slug !== post?.slug &&
+        item.status === "published" &&
+        (item.categories.some((category) =>
+          post?.categories.some((currentCategory) => currentCategory._id === category._id)
+        ) ||
+          item.tags.some((tag) => post?.tags.some((currentTag) => currentTag._id === tag._id)))
+    )
+    .slice(0, 3);
 
   const submitComment = async () => {
     if (!comment.trim()) {
@@ -134,7 +151,6 @@ function PostDetailsPage({ appState }) {
           ? "Your comment was submitted for moderation because it looked like spam."
           : "Comment posted."
       );
-      await refresh();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -169,7 +185,6 @@ function PostDetailsPage({ appState }) {
           ? "Your edited comment is waiting for moderation."
           : "Comment updated."
       );
-      await refresh();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -186,7 +201,6 @@ function PostDetailsPage({ appState }) {
       });
       removeCommentFromPost(commentId);
       setMessage("Comment deleted.");
-      await refresh();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -214,7 +228,6 @@ function PostDetailsPage({ appState }) {
 
       setModerationNotes((current) => ({ ...current, [commentId]: "" }));
       setMessage(`Comment marked as ${status}.`);
-      await refresh();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -223,9 +236,16 @@ function PostDetailsPage({ appState }) {
   };
 
   const toggleLike = async () => {
-    const data = await apiFetch(`/posts/${post._id}/like`, { token, method: "POST" });
-    setPost({ ...post, analytics: { ...post.analytics, likes: data.likes } });
-    await refresh();
+    try {
+      const data = await apiFetch(`/posts/${post._id}/like`, { token, method: "POST" });
+      setPost((currentPost) => ({
+        ...currentPost,
+        analytics: { ...currentPost.analytics, likes: data.likes },
+        liked: data.liked,
+      }));
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const share = async (platform) => {
@@ -249,7 +269,6 @@ function PostDetailsPage({ appState }) {
       body: { targetType: "author", authorId: post.author._id },
     });
     setPost({ ...post, subscribed: data.subscribed });
-    await refresh();
   };
 
   const toggleViewersPanel = async () => {
@@ -283,6 +302,13 @@ function PostDetailsPage({ appState }) {
   return (
     <div className="grid gap-6 xl:grid-cols-[1.6fr_0.8fr]">
       <article className="rounded-[2rem] bg-white p-8 shadow-card">
+        {post.coverImage ? (
+          <img
+            src={post.coverImage}
+            alt={post.title}
+            className="mb-8 h-[18rem] w-full rounded-[1.75rem] object-cover sm:h-[24rem]"
+          />
+        ) : null}
         <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-ink/50">
           {post.categories.map((category) => (
             <span key={category._id} className="rounded-full bg-smoke px-3 py-1 font-semibold">
@@ -296,6 +322,7 @@ function PostDetailsPage({ appState }) {
           <Link className="font-semibold text-ink" to={`/authors/${post.author.username}`}>
             {post.author.name}
           </Link>
+          <span>{readTime} min read</span>
           <button
             className={`rounded-full px-3 py-1 text-left transition ${
               isPostOwner ? "bg-smoke font-semibold text-ink hover:bg-mint/40" : ""
@@ -381,6 +408,7 @@ function PostDetailsPage({ appState }) {
                 key={platform}
                 className="rounded-full border border-ink/10 px-4 py-2 text-sm font-semibold"
                 onClick={() => share(platform)}
+                type="button"
               >
                 {platform}
               </button>
@@ -397,19 +425,35 @@ function PostDetailsPage({ appState }) {
           <h2 className="font-display text-3xl">Engagement</h2>
           <div className="mt-4 flex gap-2">
             <button
-              className="rounded-full bg-coral px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              className={`rounded-full px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 ${
+                post.liked ? "bg-emerald-600" : "bg-coral"
+              }`}
               onClick={toggleLike}
               disabled={!user}
+              type="button"
             >
-              Like post
+              {post.liked ? "Liked" : "Like post"}
             </button>
             <button
               className="rounded-full bg-ink px-4 py-3 text-sm font-semibold text-sand disabled:opacity-50"
               onClick={toggleSubscription}
               disabled={!user}
+              type="button"
             >
               {post.subscribed ? "Unsubscribe" : "Subscribe"}
             </button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 rounded-[1.5rem] bg-smoke p-4 text-center">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-ink/40">Likes</p>
+              <p className="mt-2 font-display text-3xl text-ink">{post.analytics.likes}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-ink/40">Shares</p>
+              <p className="mt-2 font-display text-3xl text-ink">
+                {Object.values(post.analytics.shares || {}).reduce((sum, value) => sum + value, 0)}
+              </p>
+            </div>
           </div>
           {!user ? <p className="mt-3 text-sm text-ink/50">Log in to like, comment, or subscribe.</p> : null}
         </section>
@@ -457,6 +501,7 @@ function PostDetailsPage({ appState }) {
                           className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-sand"
                           onClick={() => saveCommentEdit(item._id)}
                           disabled={submitting}
+                          type="button"
                         >
                           Save
                         </button>
@@ -466,6 +511,7 @@ function PostDetailsPage({ appState }) {
                             setEditingId("");
                             setEditingContent("");
                           }}
+                          type="button"
                         >
                           Cancel
                         </button>
@@ -486,6 +532,7 @@ function PostDetailsPage({ appState }) {
                           <button
                             className="rounded-full border border-ink/10 px-4 py-2 text-sm font-semibold"
                             onClick={() => startEditing(item)}
+                            type="button"
                           >
                             Edit
                           </button>
@@ -495,6 +542,7 @@ function PostDetailsPage({ appState }) {
                             className="rounded-full border border-coral/30 px-4 py-2 text-sm font-semibold text-coral"
                             onClick={() => deleteComment(item._id)}
                             disabled={submitting}
+                            type="button"
                           >
                             Delete
                           </button>
@@ -524,6 +572,7 @@ function PostDetailsPage({ appState }) {
                                 className="rounded-full border border-ink/10 px-3 py-2 text-xs font-semibold"
                                 onClick={() => moderateComment(item._id, option.value)}
                                 disabled={submitting}
+                                type="button"
                               >
                                 {option.label}
                               </button>
@@ -554,12 +603,32 @@ function PostDetailsPage({ appState }) {
                 className="w-full rounded-2xl bg-ink px-4 py-3 font-semibold text-sand disabled:opacity-50"
                 onClick={submitComment}
                 disabled={submitting}
+                type="button"
               >
                 Post comment
               </button>
             </div>
           ) : null}
         </section>
+        {relatedPosts.length ? (
+          <section className="rounded-[2rem] bg-white p-6 shadow-card">
+            <h2 className="font-display text-3xl">Related posts</h2>
+            <div className="mt-4 space-y-3">
+              {relatedPosts.map((item) => (
+                <Link
+                  key={item._id}
+                  className="block rounded-[1.25rem] bg-smoke p-4 transition hover:bg-mint/25"
+                  to={`/posts/${item.slug}`}
+                >
+                  <p className="font-semibold text-ink">{item.title}</p>
+                  <p className="mt-2 text-sm text-ink/60">
+                    {item.excerpt || stripHtml(item.content).slice(0, 110)}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {message ? <div className="rounded-[1.5rem] bg-mint px-4 py-3 text-sm">{message}</div> : null}
       </aside>
     </div>

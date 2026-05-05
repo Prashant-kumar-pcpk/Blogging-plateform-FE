@@ -9,11 +9,27 @@ function ChangePasswordPage({ appState }) {
     currentPassword: "",
     newPassword: "",
   });
+  const [errors, setErrors] = useState({});
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const changePassword = async (event) => {
     event.preventDefault();
+    const nextErrors = {};
+
+    if (!passwordForm.currentPassword) {
+      nextErrors.currentPassword = "Current password is required.";
+    }
+
+    if (passwordForm.newPassword.length < 10) {
+      nextErrors.newPassword = "New password must be at least 10 characters long.";
+    }
+
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      setMessage("Fix the highlighted fields before submitting.");
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -45,12 +61,16 @@ function ChangePasswordPage({ appState }) {
           type="password"
           value={passwordForm.currentPassword}
           onChange={(value) => setPasswordForm({ ...passwordForm, currentPassword: value })}
+          error={errors.currentPassword}
+          required
         />
         <InputField
           label="New password"
           type="password"
           value={passwordForm.newPassword}
           onChange={(value) => setPasswordForm({ ...passwordForm, newPassword: value })}
+          error={errors.newPassword}
+          required
         />
         <button
           className="w-full rounded-2xl bg-coral px-4 py-3 font-semibold text-white disabled:opacity-50"

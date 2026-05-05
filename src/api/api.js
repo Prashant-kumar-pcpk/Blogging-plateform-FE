@@ -1,12 +1,17 @@
-const API_URL = process.env.REACT_APP_API_URL || "https://blogging-plateform-be.onrender.com/api";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:6060/api";
 
 export async function apiFetch(path, { token, method = "GET", body } = {}) {
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  if (body) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 

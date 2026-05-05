@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import Header from "./components/layout/Header";
+import Footer from "./components/layout/Footer";
 import LoadingScreen from "./components/common/LoadingScreen";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import { apiFetch } from "./api/api";
@@ -114,9 +115,9 @@ function AppShell({ appState }) {
   const location = useLocation();
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <Header appState={appState} />
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 pb-16 pt-8 sm:px-6 lg:px-8">
         <Routes>
           <Route path="/" element={<HomePage appState={appState} />} />
           <Route path="/auth" element={<AuthPage appState={appState} />} />
@@ -159,7 +160,8 @@ function AppShell({ appState }) {
           <Route path="*" element={<Navigate to={location.pathname === "/" ? "/" : "/"} replace />} />
         </Routes>
       </main>
-    </>
+      <Footer />
+    </div>
   );
 }
 

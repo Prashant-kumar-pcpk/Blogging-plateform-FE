@@ -32,6 +32,9 @@ function DashboardPage({ appState }) {
   });
   const [message, setMessage] = useState("");
   const [editingTaxonomy, setEditingTaxonomy] = useState(null);
+  const [taxonomyErrors, setTaxonomyErrors] = useState({});
+  const [profileErrors, setProfileErrors] = useState({});
+  const [isProfileEditing, setIsProfileEditing] = useState(true);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -81,32 +84,88 @@ function DashboardPage({ appState }) {
 
   const updateProfile = async (event) => {
     event.preventDefault();
-    const updatedUser = await apiFetch("/users/profile", {
-      token,
-      method: "PUT",
-      body: profile,
+    const nextErrors = {};
+
+    if (!profile.name.trim()) {
+      nextErrors.name = "Name is required.";
+    }
+
+    if (profile.bio && profile.bio.trim().length > 300) {
+      nextErrors.bio = "Bio must be 300 characters or less.";
+    }
+
+    ["linkedin", "github", "twitter", "facebook", "instagram"].forEach((field) => {
+      const value = profile.socialLinks?.[field];
+      if (value && !/^https?:\/\//i.test(value.trim())) {
+        nextErrors[field] = "Enter a valid http(s) URL.";
+      }
     });
-    appState.persistSession({ token, user: updatedUser });
-    setMessage("Profile updated");
+
+    setProfileErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      setMessage("Fix the highlighted profile fields before saving.");
+      return;
+    }
+
+    try {
+      const updatedUser = await apiFetch("/users/profile", {
+        token,
+        method: "PUT",
+        body: profile,
+      });
+      appState.persistSession({ token, user: updatedUser });
+      setProfile((current) => ({
+        ...current,
+        name: updatedUser.name || "",
+        bio: updatedUser.bio || "",
+        avatar: updatedUser.avatar || "",
+        socialLinks: updatedUser.socialLinks || {},
+      }));
+      setIsProfileEditing(false);
+      setMessage("Profile updated");
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const createTaxonomy = async (event) => {
     event.preventDefault();
+    const nextErrors = {};
+
+    if (!taxonomyForm.name.trim()) {
+      nextErrors.name = "Name is required.";
+    }
+
+    if (taxonomyForm.type === "category" && taxonomyForm.color && !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(taxonomyForm.color.trim())) {
+      nextErrors.color = "Use a valid hex color like #0f766e.";
+    }
+
+    setTaxonomyErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      setMessage("Fix the taxonomy form before creating it.");
+      return;
+    }
+
     const path = taxonomyForm.type === "category" ? "/categories" : "/tags";
-    await apiFetch(path, {
-      token,
-      method: "POST",
-      body: {
-        name: taxonomyForm.name,
-        description: taxonomyForm.description,
-        color: taxonomyForm.type === "category" ? taxonomyForm.color : undefined,
-      },
-    });
-    setTaxonomyForm({ ...taxonomyForm, name: "", description: "" });
-    await refresh();
-    const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
-    setTaxonomyItems({ categories: allCategories, tags: allTags });
-    setMessage(`${taxonomyForm.type} created`);
+    try {
+      await apiFetch(path, {
+        token,
+        method: "POST",
+        body: {
+          name: taxonomyForm.name.trim(),
+          description: taxonomyForm.description.trim(),
+          color: taxonomyForm.type === "category" ? taxonomyForm.color.trim() : undefined,
+        },
+      });
+      setTaxonomyForm({ ...taxonomyForm, name: "", description: "" });
+      await refresh();
+      const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+      setTaxonomyItems({ categories: allCategories, tags: allTags });
+      setTaxonomyErrors({});
+      setMessage(`${taxonomyForm.type} created`);
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const startTaxonomyEdit = (type, item) => {
@@ -125,30 +184,43 @@ function DashboardPage({ appState }) {
       return;
     }
 
+    if (!editingTaxonomy.name.trim()) {
+      setMessage("Name is required.");
+      return;
+    }
+
     const path = editingTaxonomy.type === "category" ? "/categories" : "/tags";
-    await apiFetch(`${path}/${editingTaxonomy.id}`, {
-      token,
-      method: "PUT",
-      body: {
-        name: editingTaxonomy.name,
-        description: editingTaxonomy.description,
-        color: editingTaxonomy.type === "category" ? editingTaxonomy.color : undefined,
-      },
-    });
-    const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
-    setTaxonomyItems({ categories: allCategories, tags: allTags });
-    setEditingTaxonomy(null);
-    await refresh();
-    setMessage(`${editingTaxonomy.type} updated`);
+    try {
+      await apiFetch(`${path}/${editingTaxonomy.id}`, {
+        token,
+        method: "PUT",
+        body: {
+          name: editingTaxonomy.name.trim(),
+          description: editingTaxonomy.description.trim(),
+          color: editingTaxonomy.type === "category" ? editingTaxonomy.color.trim() : undefined,
+        },
+      });
+      const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+      setTaxonomyItems({ categories: allCategories, tags: allTags });
+      setEditingTaxonomy(null);
+      await refresh();
+      setMessage(`${editingTaxonomy.type} updated`);
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const deleteTaxonomy = async (type, id) => {
     const path = type === "category" ? "/categories" : "/tags";
-    await apiFetch(`${path}/${id}`, { token, method: "DELETE" });
-    const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
-    setTaxonomyItems({ categories: allCategories, tags: allTags });
-    await refresh();
-    setMessage(`${type} deleted`);
+    try {
+      await apiFetch(`${path}/${id}`, { token, method: "DELETE" });
+      const [allCategories, allTags] = await Promise.all([apiFetch("/categories"), apiFetch("/tags")]);
+      setTaxonomyItems({ categories: allCategories, tags: allTags });
+      await refresh();
+      setMessage(`${type} deleted`);
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const publishedPosts = posts.filter((post) => post.status === "published");
@@ -331,6 +403,46 @@ function DashboardPage({ appState }) {
                     )}
                   </div>
                 </div>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-[1.75rem] bg-smoke p-5">
+                    <p className="text-xs uppercase tracking-[0.28em] text-ink/40">
+                      Momentum chart
+                    </p>
+                    <h3 className="mt-2 font-display text-2xl">Recent publishing performance</h3>
+                    <div className="mt-5">
+                      <TrendChart items={analytics.recentActivity} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.75rem] bg-smoke p-5">
+                    <p className="text-xs uppercase tracking-[0.28em] text-ink/40">
+                      Share channels
+                    </p>
+                    <h3 className="mt-2 font-display text-2xl">Where readers share from</h3>
+                    <div className="mt-5 space-y-3">
+                      {Object.entries(analytics.totals.shareBreakdown || {}).map(([platform, value]) => (
+                        <div key={platform}>
+                          <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="font-semibold capitalize text-ink">{platform}</span>
+                            <span className="text-ink/55">{value}</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-white">
+                            <div
+                              className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-coral"
+                              style={{
+                                width: `${Math.max(
+                                  value > 0 ? 12 : 0,
+                                  (value / Math.max(analytics.totals.shares || 1, 1)) * 100
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </>
             ) : null}
           </section>
@@ -444,64 +556,124 @@ function DashboardPage({ appState }) {
               </div>
             </div>
 
-            <form className="mt-5 space-y-3" onSubmit={updateProfile}>
-              <InputField
-                label="Name"
-                value={profile.name}
-                onChange={(value) => setProfile({ ...profile, name: value })}
-              />
-              <InputField
-                label="Bio"
-                value={profile.bio}
-                onChange={(value) => setProfile({ ...profile, bio: value })}
-              />
-              <InputField
-                label="Avatar URL"
-                value={profile.avatar}
-                onChange={(value) => setProfile({ ...profile, avatar: value })}
-              />
-              <InputField
-                label="LinkedIn"
-                value={profile.socialLinks.linkedin || ""}
-                onChange={(value) =>
-                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, linkedin: value } })
-                }
-              />
-              <InputField
-                label="GitHub"
-                value={profile.socialLinks.github || ""}
-                onChange={(value) =>
-                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, github: value } })
-                }
-              />
-              <InputField
-                label="Twitter"
-                value={profile.socialLinks.twitter || ""}
-                onChange={(value) =>
-                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, twitter: value } })
-                }
-              />
-              <InputField
-                label="Facebook"
-                value={profile.socialLinks.facebook || ""}
-                onChange={(value) =>
-                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, facebook: value } })
-                }
-              />
-              <InputField
-                label="Instagram"
-                value={profile.socialLinks.instagram || ""}
-                onChange={(value) =>
-                  setProfile({ ...profile, socialLinks: { ...profile.socialLinks, instagram: value } })
-                }
-              />
-              <button
-                className="w-full rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
-                type="submit"
-              >
-                Save profile
-              </button>
-            </form>
+            {isProfileEditing ? (
+              <form className="mt-5 space-y-3" onSubmit={updateProfile}>
+                <InputField
+                  label="Name"
+                  value={profile.name}
+                  onChange={(value) => setProfile({ ...profile, name: value })}
+                  error={profileErrors.name}
+                  required
+                />
+                <InputField
+                  label="Bio"
+                  value={profile.bio}
+                  onChange={(value) => setProfile({ ...profile, bio: value })}
+                  error={profileErrors.bio}
+                  maxLength={300}
+                />
+                <InputField
+                  label="LinkedIn"
+                  value={profile.socialLinks.linkedin || ""}
+                  onChange={(value) =>
+                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, linkedin: value } })
+                  }
+                  error={profileErrors.linkedin}
+                />
+                <InputField
+                  label="GitHub"
+                  value={profile.socialLinks.github || ""}
+                  onChange={(value) =>
+                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, github: value } })
+                  }
+                  error={profileErrors.github}
+                />
+                <InputField
+                  label="Twitter"
+                  value={profile.socialLinks.twitter || ""}
+                  onChange={(value) =>
+                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, twitter: value } })
+                  }
+                  error={profileErrors.twitter}
+                />
+                <InputField
+                  label="Facebook"
+                  value={profile.socialLinks.facebook || ""}
+                  onChange={(value) =>
+                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, facebook: value } })
+                  }
+                  error={profileErrors.facebook}
+                />
+                <InputField
+                  label="Instagram"
+                  value={profile.socialLinks.instagram || ""}
+                  onChange={(value) =>
+                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, instagram: value } })
+                  }
+                  error={profileErrors.instagram}
+                />
+                <div className="flex gap-3">
+                  <button
+                    className="flex-1 rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
+                    type="submit"
+                  >
+                    Save profile
+                  </button>
+                  <button
+                    className="rounded-2xl border border-ink/10 px-4 py-3 font-semibold text-ink"
+                    onClick={() => {
+                      setIsProfileEditing(false);
+                      setProfileErrors({});
+                      setMessage("");
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-[1.5rem] bg-smoke p-4">
+                  <p className="font-semibold text-ink">{profile.name || "Unnamed profile"}</p>
+                  <p className="mt-2 text-sm leading-6 text-ink/65">
+                    {profile.bio || "No bio added yet."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {[
+                      ["LinkedIn", profile.socialLinks.linkedin],
+                      ["GitHub", profile.socialLinks.github],
+                      ["Twitter", profile.socialLinks.twitter],
+                      ["Facebook", profile.socialLinks.facebook],
+                      ["Instagram", profile.socialLinks.instagram],
+                    ]
+                      .filter(([, value]) => value)
+                      .map(([label, value]) => (
+                        <a
+                          key={`${label}-${value}`}
+                          className="rounded-full border border-ink/10 bg-white px-3 py-1 text-xs font-semibold text-ink/70"
+                          href={value}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {label}
+                        </a>
+                      ))}
+                  </div>
+                </div>
+                <button
+                  className="w-full rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
+                  onClick={() => {
+                    setIsProfileEditing(true);
+                    setProfileErrors({});
+                    setMessage("");
+                  }}
+                  type="button"
+                >
+                  Edit profile
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="rounded-[2rem] bg-white p-6 shadow-card">
@@ -547,18 +719,21 @@ function DashboardPage({ appState }) {
                       <button
                         className="rounded-full border border-ink/10 px-4 py-2 text-sm font-semibold"
                         onClick={() => moderateComment(item._id, "visible")}
+                        type="button"
                       >
                         Approve
                       </button>
                       <button
                         className="rounded-full border border-ink/10 px-4 py-2 text-sm font-semibold"
                         onClick={() => moderateComment(item._id, "flagged")}
+                        type="button"
                       >
                         Flag
                       </button>
                       <button
                         className="rounded-full border border-coral/30 px-4 py-2 text-sm font-semibold text-coral"
                         onClick={() => moderateComment(item._id, "deleted")}
+                        type="button"
                       >
                         Delete
                       </button>
@@ -622,6 +797,8 @@ function DashboardPage({ appState }) {
                 label="Name"
                 value={taxonomyForm.name}
                 onChange={(value) => setTaxonomyForm({ ...taxonomyForm, name: value })}
+                error={taxonomyErrors.name}
+                required
               />
               <InputField
                 label="Description"
@@ -633,6 +810,8 @@ function DashboardPage({ appState }) {
                   label="Color"
                   value={taxonomyForm.color}
                   onChange={(value) => setTaxonomyForm({ ...taxonomyForm, color: value })}
+                  error={taxonomyErrors.color}
+                  placeholder="#0f766e"
                 />
               ) : null}
               <button
@@ -800,6 +979,55 @@ function MiniMetric({ label, value }) {
     <div>
       <p className="text-xs uppercase tracking-[0.2em] text-ink/40">{label}</p>
       <p className="mt-2 font-display text-2xl text-ink">{value}</p>
+    </div>
+  );
+}
+
+function TrendChart({ items }) {
+  if (!items?.length) {
+    return (
+      <div className="rounded-[1.5rem] bg-white p-4 text-sm text-ink/60">
+        Publish a few stories to unlock trend visualizations here.
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(
+    ...items.flatMap((item) => [item.views, item.likes, item.comments, item.shares]),
+    1
+  );
+
+  return (
+    <div className="space-y-4">
+      {items.map((item) => (
+        <div key={item.slug} className="rounded-[1.25rem] bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="max-w-[14rem] truncate text-sm font-semibold text-ink">{item.title}</p>
+            <span className="text-xs text-ink/45">{formatDate(item.publishedAt)}</span>
+          </div>
+          <div className="mt-4 space-y-3">
+            {[
+              { label: "Views", value: item.views, tone: "from-coral to-orange-400" },
+              { label: "Likes", value: item.likes, tone: "from-emerald-400 to-teal-500" },
+              { label: "Comments", value: item.comments, tone: "from-slate-700 to-slate-500" },
+              { label: "Shares", value: item.shares, tone: "from-amber-400 to-yellow-500" },
+            ].map((metric) => (
+              <div key={`${item.slug}-${metric.label}`}>
+                <div className="flex items-center justify-between gap-3 text-xs text-ink/55">
+                  <span>{metric.label}</span>
+                  <span>{metric.value}</span>
+                </div>
+                <div className="mt-1 h-2 rounded-full bg-smoke">
+                  <div
+                    className={`h-2 rounded-full bg-gradient-to-r ${metric.tone}`}
+                    style={{ width: `${Math.max(metric.value > 0 ? 10 : 0, (metric.value / maxValue) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
