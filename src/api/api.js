@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:6060/api";
+const API_URL = process.env.REACT_APP_API_URL || "https://blogging-plateform-be.onrender.com/api";
 
 export async function apiFetch(path, { token, method = "GET", body } = {}) {
   const headers = {
