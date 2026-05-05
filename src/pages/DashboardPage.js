@@ -86,20 +86,9 @@ function DashboardPage({ appState }) {
     event.preventDefault();
     const nextErrors = {};
 
-    if (!profile.name.trim()) {
-      nextErrors.name = "Name is required.";
-    }
-
     if (profile.bio && profile.bio.trim().length > 300) {
       nextErrors.bio = "Bio must be 300 characters or less.";
     }
-
-    ["linkedin", "github", "twitter", "facebook", "instagram"].forEach((field) => {
-      const value = profile.socialLinks?.[field];
-      if (value && !/^https?:\/\//i.test(value.trim())) {
-        nextErrors[field] = "Enter a valid http(s) URL.";
-      }
-    });
 
     setProfileErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
@@ -558,61 +547,22 @@ function DashboardPage({ appState }) {
 
             {isProfileEditing ? (
               <form className="mt-5 space-y-3" onSubmit={updateProfile}>
-                <InputField
-                  label="Name"
-                  value={profile.name}
-                  onChange={(value) => setProfile({ ...profile, name: value })}
-                  error={profileErrors.name}
-                  required
-                />
-                <InputField
-                  label="Bio"
-                  value={profile.bio}
-                  onChange={(value) => setProfile({ ...profile, bio: value })}
-                  error={profileErrors.bio}
-                  maxLength={300}
-                />
-                <InputField
-                  label="LinkedIn"
-                  value={profile.socialLinks.linkedin || ""}
-                  onChange={(value) =>
-                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, linkedin: value } })
-                  }
-                  error={profileErrors.linkedin}
-                />
-                <InputField
-                  label="GitHub"
-                  value={profile.socialLinks.github || ""}
-                  onChange={(value) =>
-                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, github: value } })
-                  }
-                  error={profileErrors.github}
-                />
-                <InputField
-                  label="Twitter"
-                  value={profile.socialLinks.twitter || ""}
-                  onChange={(value) =>
-                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, twitter: value } })
-                  }
-                  error={profileErrors.twitter}
-                />
-                <InputField
-                  label="Facebook"
-                  value={profile.socialLinks.facebook || ""}
-                  onChange={(value) =>
-                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, facebook: value } })
-                  }
-                  error={profileErrors.facebook}
-                />
-                <InputField
-                  label="Instagram"
-                  value={profile.socialLinks.instagram || ""}
-                  onChange={(value) =>
-                    setProfile({ ...profile, socialLinks: { ...profile.socialLinks, instagram: value } })
-                  }
-                  error={profileErrors.instagram}
-                />
-                <div className="flex gap-3">
+              <InputField
+                label="Name"
+                value={profile.name}
+                onChange={(value) => setProfile({ ...profile, name: value })}
+                error={profileErrors.name}
+                placeholder="Your display name"
+              />
+              <InputField
+                label="Bio"
+                value={profile.bio}
+                onChange={(value) => setProfile({ ...profile, bio: value })}
+                error={profileErrors.bio}
+                maxLength={300}
+                placeholder="Tell readers about yourself"
+              />
+              <div className="flex gap-3">
                   <button
                     className="flex-1 rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
                     type="submit"
@@ -639,27 +589,6 @@ function DashboardPage({ appState }) {
                   <p className="mt-2 text-sm leading-6 text-ink/65">
                     {profile.bio || "No bio added yet."}
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {[
-                      ["LinkedIn", profile.socialLinks.linkedin],
-                      ["GitHub", profile.socialLinks.github],
-                      ["Twitter", profile.socialLinks.twitter],
-                      ["Facebook", profile.socialLinks.facebook],
-                      ["Instagram", profile.socialLinks.instagram],
-                    ]
-                      .filter(([, value]) => value)
-                      .map(([label, value]) => (
-                        <a
-                          key={`${label}-${value}`}
-                          className="rounded-full border border-ink/10 bg-white px-3 py-1 text-xs font-semibold text-ink/70"
-                          href={value}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {label}
-                        </a>
-                      ))}
-                  </div>
                 </div>
                 <button
                   className="w-full rounded-2xl bg-ink px-4 py-3 font-semibold text-sand"
